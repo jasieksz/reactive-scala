@@ -1,24 +1,25 @@
-import Cart.{ItemAdded, ItemRemoved}
+import Cart._
 import akka.actor.FSM
+import scala.concurrent.duration._
 
 sealed trait CartState
 case object Empty extends CartState
 case object NonEmpty extends CartState
 case object InCheckout extends CartState
 
-sealed trait CartContent
-case class CartItems(count: Int = 0) extends CartContent
+sealed trait CartData
+case class CartItems(count: Int = 0) extends CartData
 
-class CartFSM extends FSM[CartState, CartContent]{
+class CartFSM(expirationTime: FiniteDuration) extends FSM[CartState, CartData]{
 
   startWith(Empty, CartItems())
 
   when(Empty) {
-    case Event(ItemAdded, CartItems(count)) =>
-      goto(NonEmpty) using CartItems(count + 1)
+    case Event(ItemAdded, CartItems(_)) =>
+      goto(NonEmpty) using CartItems(1)
   }
 
-  when(NonEmpty) {
+  when(NonEmpty, stateTimeout = expirationTime) {
     case Event(ItemRemoved, CartItems(1)) =>
       goto(Empty) using CartItems()
 
@@ -28,11 +29,23 @@ class CartFSM extends FSM[CartState, CartContent]{
     case Event(ItemAdded, CartItems(count)) =>
       stay using CartItems(count + 1)
 
-    // TODO : Add Checkout
-    // TODO : Add timeout
+    case Event(CheckoutStarted, CartItems(count)) =>
+      goto(InCheckout) using CartItems(count)
+
+    case Event(StateTimeout, CartItems(_)) =>
+      goto(Empty) using CartItems()
+
   }
 
-  initialize()
+  when(InCheckout) {
+    case Event(CheckoutCanceled, CartItems(count)) =>
+      goto(NonEmpty) using CartItems(count)
 
+    case Event(CheckoutClosed, CartItems(_)) =>
+      goto(Empty) using CartItems()
+  }
+
+
+  initialize()
 }
 
