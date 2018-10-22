@@ -10,7 +10,7 @@ case object InCheckout extends CartState
 sealed trait CartData
 case class CartItems(count: Int = 0) extends CartData
 
-class CartFSM(expirationTime: FiniteDuration) extends FSM[CartState, CartData]{
+class CartFSM(expirationTime: FiniteDuration = 10 seconds) extends FSM[CartState, CartData]{
 
   startWith(Empty, CartItems())
 
