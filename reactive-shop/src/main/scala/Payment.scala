@@ -1,6 +1,6 @@
 import java.util.UUID
 
-import akka.actor.Timers
+import akka.actor.{ActorRef, Timers}
 import akka.event.LoggingReceive
 
 import scala.concurrent.duration._
@@ -21,5 +21,6 @@ object Payment {
 
   case class PaymentConfirmed(id: UUID) extends Data
   case class PaymentReceived(id: UUID) extends Data
+  case class Cancelled(actorRef: ActorRef) extends Data
 
 }

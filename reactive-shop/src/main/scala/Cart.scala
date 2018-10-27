@@ -30,12 +30,12 @@ class Cart(expirationTime: FiniteDuration = 10 seconds) extends Timers {
     case CartTimerExpired =>
       timers.cancel(CartTimerKey)
       context.become(empty(0))
-    case CheckoutStarted =>
+    case StartCheckout =>
       timers.cancel(CartTimerKey)
-      context.become(inCheckout(items))
+      context.become(inCheckout(items, sender()))
   }
 
-  def inCheckout(items: Int): Receive = LoggingReceive {
+  def inCheckout(items: Int, actorRef: ActorRef): Receive = LoggingReceive {
     case CheckoutCanceled =>
       context.become(nonEmpty(items))
     case CheckoutClosed =>
@@ -50,6 +50,8 @@ object Cart {
   case class AddItem(id: UUID) extends Command
 
   case class RemoveItem(id: UUID) extends Command
+
+  case object StartCheckout extends Command
 
   case class CheckoutStarted(checkoutRef: ActorRef)
 

@@ -54,8 +54,9 @@ object Checkout {
   case class SelectDeliveryMethod(method: String = "post")
   case class SelectPaymentMethod(method: String = "credit card")
   case class PaymentServiceStarted(paymentRef: ActorRef)
+  case object Pay
   case object PaymentReceived
-  case object Cancelled
+  case class Cancelled(actorRef: ActorRef)
   case object PaymentTimerExpired
   case object CheckoutTimerExpired
   case object PaymentTimerKey
