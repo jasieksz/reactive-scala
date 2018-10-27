@@ -1,5 +1,8 @@
-import akka.actor.Timers
+import java.util.UUID
+
+import akka.actor.{ActorRef, Timers}
 import akka.event.LoggingReceive
+
 import scala.concurrent.duration._
 import Cart._
 
@@ -8,16 +11,16 @@ class Cart(expirationTime: FiniteDuration = 10 seconds) extends Timers {
   override def receive: Receive = empty(0)
 
   def empty(items: Int): Receive = LoggingReceive {
-    case ItemAdded =>
+    case AddItem =>
       timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
       context.become(nonEmpty(items + 1))
   }
 
   def nonEmpty(items: Int): Receive = LoggingReceive {
-    case ItemAdded =>
+    case AddItem =>
       timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
       context.become(nonEmpty(items + 1))
-    case ItemRemoved =>
+    case RemoveItem =>
       if (items == 1) {
         timers.cancel(CartTimerKey)
         context.become(empty(0))
@@ -42,11 +45,13 @@ class Cart(expirationTime: FiniteDuration = 10 seconds) extends Timers {
 
 object Cart {
 
-  case object ItemAdded
+  sealed trait Command
 
-  case object ItemRemoved
+  case class AddItem(id: UUID) extends Command
 
-  case object CheckoutStarted
+  case class RemoveItem(id: UUID) extends Command
+
+  case class CheckoutStarted(checkoutRef: ActorRef)
 
   case object CheckoutCanceled
 

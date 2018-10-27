@@ -1,4 +1,4 @@
-import akka.actor.{PoisonPill, Timers}
+import akka.actor.{ActorRef, PoisonPill, Timers}
 import akka.event.LoggingReceive
 
 import scala.concurrent.duration._
@@ -10,7 +10,7 @@ class Checkout (checkoutExpirationTime: FiniteDuration = 10 seconds,
   override def receive: Receive = selectingDelivery("", "")
 
   def selectingDelivery(delivery: String, payment: String): Receive = LoggingReceive {
-    case DeliveryMethodSelected(method) =>
+    case SelectDeliveryMethod(method) =>
       timers.startSingleTimer(CheckoutTimerKey, CheckoutTimerExpired, checkoutExpirationTime)
       context.become(selectingPaymentMethod(method, payment))
     case CheckoutTimerExpired | Checkout.Cancelled =>
@@ -18,7 +18,7 @@ class Checkout (checkoutExpirationTime: FiniteDuration = 10 seconds,
   }
 
   def selectingPaymentMethod(delivery: String, payment: String): Receive = LoggingReceive {
-    case PaymentSelected(method) =>
+    case SelectPaymentMethod(method) =>
       timers.cancel(CheckoutTimerKey)
       timers.startSingleTimer(PaymentTimerKey, PaymentTimerExpired, paymentExpirationTime)
       context.become(processingPayment(delivery, method))
@@ -51,8 +51,9 @@ class Checkout (checkoutExpirationTime: FiniteDuration = 10 seconds,
 }
 
 object Checkout {
-  case class DeliveryMethodSelected(method: String = "post")
-  case class PaymentSelected(method: String = "credit card")
+  case class SelectDeliveryMethod(method: String = "post")
+  case class SelectPaymentMethod(method: String = "credit card")
+  case class PaymentServiceStarted(paymentRef: ActorRef)
   case object PaymentReceived
   case object Cancelled
   case object PaymentTimerExpired

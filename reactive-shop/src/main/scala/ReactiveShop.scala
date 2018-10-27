@@ -1,4 +1,4 @@
-import Cart.ItemAdded
+import Cart.AddItem
 import akka.actor.{ActorSystem, Props}
 import Checkout._
 
@@ -8,11 +8,11 @@ object ReactiveShop extends App{
   val cart = system.actorOf(Props(new Cart()))
   val checkout = system.actorOf(Props(new Checkout()))
 
-  cart ! ItemAdded
-  cart ! ItemAdded
+  cart ! AddItem
+  cart ! AddItem
 
-  checkout ! DeliveryMethodSelected("inpost")
-  checkout ! PaymentSelected("visa")
+  checkout ! SelectDeliveryMethod("inpost")
+  checkout ! SelectPaymentMethod("visa")
   checkout ! PaymentReceived
   checkout ! Cancelled
 }

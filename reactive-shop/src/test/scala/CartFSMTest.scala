@@ -1,4 +1,4 @@
-import Cart.{ItemAdded, ItemRemoved}
+import Cart.{AddItem, RemoveItem}
 import akka.actor.ActorSystem
 import akka.testkit.{TestFSMRef, TestKit}
 import org.scalatest.concurrent.Eventually
@@ -19,22 +19,22 @@ class CartFSMTest extends TestKit(ActorSystem("CartFSMTest")) with FlatSpecLike
 
   "Cart" should "have 2 items" in {
     val cart = TestFSMRef(new CartFSM())
-    cart ! ItemAdded
-    cart ! ItemAdded
+    cart ! AddItem
+    cart ! AddItem
     cart.stateName shouldBe NonEmpty
     cart.stateData shouldBe CartItems(2)
   }
 
   "Cart" should "ignore removing non existent items" in {
     val cart = TestFSMRef(new CartFSM())
-    cart ! ItemRemoved
+    cart ! RemoveItem
     cart.stateName shouldBe Empty
     cart.stateData shouldBe CartItems(0)
   }
 
   "Cart" should "be in Empty state after timeout" in {
     val cart = TestFSMRef(new CartFSM(1 second))
-    cart ! ItemAdded
+    cart ! AddItem
     eventually {
       cart.stateName shouldBe Empty
       cart.stateData shouldBe CartItems()
@@ -43,7 +43,7 @@ class CartFSMTest extends TestKit(ActorSystem("CartFSMTest")) with FlatSpecLike
 
   "Cart" should "be in NonEmpty state before timeout" in {
     val cart = TestFSMRef(new CartFSM(3 second))
-    cart ! ItemAdded
+    cart ! AddItem
     eventually {
       cart.stateName shouldBe NonEmpty
       cart.stateData shouldBe CartItems(1)
