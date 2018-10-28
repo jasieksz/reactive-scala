@@ -1,64 +1,75 @@
-import akka.actor.{ActorRef, PoisonPill, Timers}
+import akka.actor.{ActorRef, PoisonPill, Props, Timers}
 import akka.event.LoggingReceive
 
 import scala.concurrent.duration._
 import Checkout._
 
-class Checkout (checkoutExpirationTime: FiniteDuration = 10 seconds,
-                paymentExpirationTime: FiniteDuration = 10 seconds) extends Timers {
+class Checkout(checkoutExpirationTime: FiniteDuration = 10 seconds) extends Timers {
 
-  override def receive: Receive = selectingDelivery("", "")
+  override def receive: Receive = uninitialized()
 
-  def selectingDelivery(delivery: String, payment: String): Receive = LoggingReceive {
+  def uninitialized(): Receive = LoggingReceive {
+    case Start(orderManager) =>
+      context.become(selectingDeliveryAndPayment(orderManager, "", ""))
+  }
+
+  def selectingDeliveryAndPayment(orderManager: ActorRef, delivery: String, payment: String): Receive = LoggingReceive {
     case SelectDeliveryMethod(method) =>
       timers.startSingleTimer(CheckoutTimerKey, CheckoutTimerExpired, checkoutExpirationTime)
-      context.become(selectingPaymentMethod(method, payment))
-    case CheckoutTimerExpired | Checkout.Cancelled =>
-      context.become(cancelled(delivery, payment))
-  }
+      context.become(selectingDeliveryAndPayment(orderManager, method, payment))
 
-  def selectingPaymentMethod(delivery: String, payment: String): Receive = LoggingReceive {
     case SelectPaymentMethod(method) =>
+      timers.startSingleTimer(CheckoutTimerKey, CheckoutTimerExpired, checkoutExpirationTime)
+      context.become(selectingDeliveryAndPayment(orderManager, delivery, method))
+
+    case Buy =>
+      val paymentActor = context.actorOf(Props(new Payment()))
+      orderManager ! PaymentServiceStarted(paymentActor)
       timers.cancel(CheckoutTimerKey)
-      timers.startSingleTimer(PaymentTimerKey, PaymentTimerExpired, paymentExpirationTime)
-      context.become(processingPayment(delivery, method))
-    case CheckoutTimerExpired | Checkout.Cancelled =>
-      context.become(cancelled(delivery, payment))
-  }
+      context.become(processingPayment(orderManager, delivery, payment))
 
-  def processingPayment(delivery: String, payment: String): Receive = LoggingReceive {
-    case PaymentReceived =>
-      timers.cancel(PaymentTimerKey)
-      context.become(closed(delivery, payment))
-    case PaymentTimerExpired | Checkout.Cancelled =>
-      context.become(cancelled(delivery, payment))
+    case Closed =>
+      context.parent ! Closed
+      orderManager ! Closed
+      self ! PoisonPill
 
-  }
-
-  def cancelled(delivery: String, payment: String): Receive = LoggingReceive {
-    case _ =>
-      println("CANCELLED")
+    case CheckoutTimerExpired | OrderManager.CancelCheckout =>
+      context.parent ! Cancelled
+      orderManager ! Cancelled
       self ! PoisonPill
   }
 
-  def closed(delivery: String, payment: String): Receive = LoggingReceive {
-    case _ =>
-      println("CLOSED")
-      self ! PoisonPill
+  def processingPayment(orderManager: ActorRef, delivery: String, payment: String): Receive = LoggingReceive {
+    case Payment.PaymentReceived(id) =>
+      sender() ! PoisonPill
+      context.parent ! Closed
+    case Payment.Cancelled =>
+      sender() ! PoisonPill
+      context.become(selectingDeliveryAndPayment(orderManager, delivery, payment))
+
   }
-
-
 }
 
 object Checkout {
-  case class SelectDeliveryMethod(method: String = "post")
-  case class SelectPaymentMethod(method: String = "credit card")
+
+  sealed trait Command
+
+  case class Start(orderManagerRef: ActorRef) extends Command
+
+  case class SelectDeliveryMethod(method: String) extends Command
+
+  case class SelectPaymentMethod(method: String) extends Command
+
+  case object Buy
+
   case class PaymentServiceStarted(paymentRef: ActorRef)
-  case object Pay
-  case object PaymentReceived
-  case class Cancelled(actorRef: ActorRef)
-  case object PaymentTimerExpired
+
+  case class Cancelled(cartRef: ActorRef)
+
+  case object Closed
+
   case object CheckoutTimerExpired
-  case object PaymentTimerKey
+
   case object CheckoutTimerKey
+
 }

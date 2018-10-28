@@ -1,26 +1,43 @@
 import java.util.UUID
 
-import akka.actor.{ActorRef, Timers}
+import Payment._
+import akka.actor.{ActorRef, PoisonPill, Timers}
 import akka.event.LoggingReceive
 
 import scala.concurrent.duration._
 
 
-class Payment extends Timers {
+class Payment(paymentExpirationTime: FiniteDuration = 10 seconds) extends Timers {
 
-  override def receive: Receive = initial()
+  override def receive: Receive = unnamed()
 
-  def initial(): LoggingReceive = {
-    case _ => _
+  def unnamed(): LoggingReceive = {
+    case Pay =>
+      timers.startSingleTimer(PaymentTimerKey, PaymentTimerExpired, paymentExpirationTime)
+      val id = UUID.randomUUID()
+      sender() ! PaymentConfirmed(id)
+      context.parent ! PaymentReceived(id)
+
+    case OrderManager.CancelPayment | PaymentTimerExpired =>
+      sender() ! Cancelled(context.parent)
+      context.parent ! Cancelled
   }
 }
 
 object Payment {
 
-  sealed trait Data
+  sealed trait Command
 
-  case class PaymentConfirmed(id: UUID) extends Data
-  case class PaymentReceived(id: UUID) extends Data
-  case class Cancelled(actorRef: ActorRef) extends Data
+  case object Pay extends Command
+
+  case class PaymentConfirmed(id: UUID)
+
+  case class PaymentReceived(id: UUID)
+
+  case class Cancelled(checkout: ActorRef)
+
+  case object PaymentTimerExpired
+
+  case object PaymentTimerKey
 
 }
