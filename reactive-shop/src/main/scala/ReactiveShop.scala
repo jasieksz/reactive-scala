@@ -1,18 +1,27 @@
-import Cart.AddItem
+import java.util.UUID
 import akka.actor.{ActorSystem, Props}
-import Checkout._
 
-object ReactiveShop extends App{
+object ReactiveShop extends App {
   val system = ActorSystem("system")
 
-  val cart = system.actorOf(Props(new Cart()))
-  val checkout = system.actorOf(Props(new Checkout()))
+  val manager = system.actorOf(Props(new OrderManager()))
 
-  cart ! AddItem
-  cart ! AddItem
+  manager ! OrderManager.AddItem(UUID.randomUUID())
+  manager ! OrderManager.StartCheckout
 
-  checkout ! SelectDeliveryMethod("inpost")
-  checkout ! SelectPaymentMethod("visa")
-  checkout ! PaymentReceived
-  checkout ! Cancelled
+  Thread.sleep(2000)
+
+  manager ! OrderManager.SelectDeliveryMethod("poczta")
+  manager ! OrderManager.SelectPaymentMethod("visa")
+
+//  Thread.sleep(2000)
+//
+//  manager ! OrderManager.GetParametersForTest
+
+
+  manager ! OrderManager.Buy
+
+  Thread.sleep(2000)
+
+  manager ! OrderManager.Pay
 }

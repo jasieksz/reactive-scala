@@ -10,7 +10,7 @@ class OrderManager extends Timers {
 
   override def receive: Receive = uninitialized()
 
-  def uninitialized(): LoggingReceive = {
+  def uninitialized(): Receive = LoggingReceive {
     case Initialize =>
       val cart = context.actorOf(Props(new Cart()))
       context.become(withCart(cart))
@@ -19,7 +19,7 @@ class OrderManager extends Timers {
       self ! Initialize
   }
 
-  def withCart(cart: ActorRef): LoggingReceive = {
+  def withCart(cart: ActorRef): Receive = LoggingReceive {
     case AddItem(item) =>
       cart ! Cart.AddItem(item)
 
@@ -33,7 +33,7 @@ class OrderManager extends Timers {
       context.become(withCheckout(checkout))
   }
 
-  def withCheckout(checkout: ActorRef): LoggingReceive = {
+  def withCheckout(checkout: ActorRef): Receive = LoggingReceive {
     case SelectDeliveryMethod(method) =>
       checkout ! Checkout.SelectDeliveryMethod(method)
 
@@ -51,9 +51,15 @@ class OrderManager extends Timers {
 
     case Checkout.PaymentServiceStarted(payment) =>
       context.become(withPayment(payment))
+
+//    case GetParametersForTest =>
+//      checkout ! Checkout.GetParametersForTest
+//
+//    case res: (String, String) =>
+//      println(res)
   }
 
-  def withPayment(payment: ActorRef): LoggingReceive = {
+  def withPayment(payment: ActorRef): Receive = LoggingReceive {
 
     case Pay =>
       payment ! Payment.Pay
@@ -94,5 +100,7 @@ object OrderManager {
   case object CancelCheckout
 
   case object CancelPayment
+
+  case object GetParametersForTest
 
 }

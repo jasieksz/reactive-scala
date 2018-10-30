@@ -11,7 +11,7 @@ class Payment(paymentExpirationTime: FiniteDuration = 10 seconds) extends Timers
 
   override def receive: Receive = unnamed()
 
-  def unnamed(): LoggingReceive = {
+  def unnamed(): Receive = LoggingReceive {
     case Pay =>
       timers.startSingleTimer(PaymentTimerKey, PaymentTimerExpired, paymentExpirationTime)
       val id = UUID.randomUUID()

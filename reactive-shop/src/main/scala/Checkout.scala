@@ -35,8 +35,11 @@ class Checkout(checkoutExpirationTime: FiniteDuration = 10 seconds) extends Time
 
     case CheckoutTimerExpired | OrderManager.CancelCheckout =>
       context.parent ! Cancelled
-      orderManager ! Cancelled
+      orderManager ! Cancelled(context.parent)
       self ! PoisonPill
+
+    case GetParametersForTest =>
+      sender() ! (delivery, payment)
   }
 
   def processingPayment(orderManager: ActorRef, delivery: String, payment: String): Receive = LoggingReceive {
@@ -46,7 +49,6 @@ class Checkout(checkoutExpirationTime: FiniteDuration = 10 seconds) extends Time
     case Payment.Cancelled =>
       sender() ! PoisonPill
       context.become(selectingDeliveryAndPayment(orderManager, delivery, payment))
-
   }
 }
 
@@ -71,5 +73,7 @@ object Checkout {
   case object CheckoutTimerExpired
 
   case object CheckoutTimerKey
+
+  case object GetParametersForTest
 
 }
