@@ -1,18 +1,37 @@
-import Cart.ItemAdded
-import akka.actor.{ActorSystem, Props}
-import Checkout._
+import java.net.URI
 
-object ReactiveShop extends App{
+import akka.actor.{ActorSystem, Props}
+import managers.OrderManager
+import model.Item
+
+object ReactiveShop extends App {
   val system = ActorSystem("system")
 
-  val cart = system.actorOf(Props(new Cart()))
-  val checkout = system.actorOf(Props(new Checkout()))
+  val manager = system.actorOf(Props(new OrderManager()))
 
-  cart ! ItemAdded
-  cart ! ItemAdded
+  val apple: Item = Item(URI.create("apple"), "apple", 1)
+  val orange: Item = Item(URI.create("orange"), "orange", 1)
 
-  checkout ! DeliveryMethodSelected("inpost")
-  checkout ! PaymentSelected("visa")
-  checkout ! PaymentReceived
-  checkout ! Cancelled
+  manager ! OrderManager.AddItem(apple)
+  manager ! OrderManager.AddItem(orange)
+
+  manager ! OrderManager.GetCart
+
+  manager ! OrderManager.StartCheckout
+
+  Thread.sleep(1000)
+
+  manager ! OrderManager.SelectDeliveryMethod("poczta")
+  manager ! OrderManager.SelectPaymentMethod("visa")
+
+  Thread.sleep(1000)
+
+  manager ! OrderManager.Buy
+
+  Thread.sleep(1000)
+
+  manager ! OrderManager.Pay
+
+  Thread.sleep(3000)
+  system.terminate()
 }
