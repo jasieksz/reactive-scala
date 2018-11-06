@@ -19,7 +19,7 @@ class CartManager(expirationTime: FiniteDuration = 10 seconds) extends Timers {
       context.become(nonEmpty(cart.addItem(item)))
 
     case OrderManager.GetCart(replyTo) =>
-      replyTo ! OrderManager.GotCart(cart)
+      replyTo ! cart
   }
 
   def nonEmpty(cart: Cart): Receive = LoggingReceive {
@@ -37,7 +37,7 @@ class CartManager(expirationTime: FiniteDuration = 10 seconds) extends Timers {
       } else {
         timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
         replyTo ! ItemRemoved(item, count)
-        context.become(nonEmpty(cart.removeItem(item, count)))
+        context.become(nonEmpty(cart.removeItems(item, count)))
       }
 
     case StartCheckout(orderManager) =>
@@ -54,7 +54,7 @@ class CartManager(expirationTime: FiniteDuration = 10 seconds) extends Timers {
       context.become(empty(Cart.empty))
 
     case OrderManager.GetCart(replyTo) =>
-      replyTo ! OrderManager.GotCart(cart)
+      replyTo ! cart
   }
 
   def inCheckout(cart: Cart): Receive = LoggingReceive {

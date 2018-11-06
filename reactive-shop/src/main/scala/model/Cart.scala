@@ -16,12 +16,11 @@ case class Cart(items: Map[Item, Int]) {
     }
   }
 
-  def removeItem(item: Item, count: Int): Cart = {
+  def removeItems(item: Item, count: Int): Cart = {
     if (count == 0) {
       return this
     }
-    removeItem(item)
-    removeItem(item, count - 1)
+    removeItem(item).removeItems(item, count - 1)
   }
 
   def getCount(item: Item): Int = {

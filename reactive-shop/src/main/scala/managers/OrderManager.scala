@@ -4,7 +4,7 @@ import akka.actor.{ActorRef, Props, Timers}
 import akka.event.LoggingReceive
 import akka.util.Timeout
 import managers.OrderManager._
-import model.{Cart, Item}
+import model.{Item}
 
 import scala.concurrent.duration._
 
@@ -36,14 +36,6 @@ class OrderManager extends Timers {
 
     case CartManager.CheckoutStarted(checkout) =>
       context.become(withCheckout(checkout))
-
-    case GetCart =>
-      cart ! GetCart(self)
-
-    case GotCart(cartData) =>
-      println("CART CONTENT")
-      println(cartData.items)
-
   }
 
   def withCheckout(checkout: ActorRef): Receive = LoggingReceive {
@@ -111,7 +103,4 @@ object OrderManager {
   sealed trait OrderManagerEvent
 
   case object Done extends OrderManagerEvent
-
-  case class GotCart(cart: Cart) extends OrderManagerEvent
-
 }
