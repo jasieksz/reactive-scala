@@ -1,5 +1,7 @@
 import java.util.UUID
+
 import akka.actor.{ActorSystem, Props}
+import managers.OrderManager
 
 object ReactiveShop extends App {
   val system = ActorSystem("system")
@@ -9,19 +11,19 @@ object ReactiveShop extends App {
   manager ! OrderManager.AddItem(UUID.randomUUID())
   manager ! OrderManager.StartCheckout
 
-  Thread.sleep(2000)
+  Thread.sleep(1000)
 
   manager ! OrderManager.SelectDeliveryMethod("poczta")
   manager ! OrderManager.SelectPaymentMethod("visa")
 
 //  Thread.sleep(2000)
 //
-//  manager ! OrderManager.GetParametersForTest
+//  manager ! managers.OrderManager.GetParametersForTest
 
 
   manager ! OrderManager.Buy
 
-  Thread.sleep(2000)
+  Thread.sleep(1000)
 
   manager ! OrderManager.Pay
 }

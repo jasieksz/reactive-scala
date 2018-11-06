@@ -1,8 +1,11 @@
+package managers
+
 import java.util.UUID
 
-import OrderManager._
 import akka.actor.{ActorRef, Props, Timers}
 import akka.event.LoggingReceive
+import managers.OrderManager._
+import model.Item
 
 class OrderManager extends Timers {
 
@@ -12,48 +15,48 @@ class OrderManager extends Timers {
 
   def uninitialized(): Receive = LoggingReceive {
     case Initialize =>
-      val cart = context.actorOf(Props(new Cart()))
+      val cart = context.actorOf(Props(new CartManager()))
       context.become(withCart(cart))
 
-    case Checkout.Closed =>
+    case CheckoutManager.Closed =>
       self ! Initialize
   }
 
   def withCart(cart: ActorRef): Receive = LoggingReceive {
     case AddItem(item) =>
-      cart ! Cart.AddItem(item)
+      cart ! CartManager.AddItem(item, self)
 
     case RemoveItem(item) =>
-      cart ! Cart.RemoveItem(item)
+      cart ! CartManager.RemoveItem(item, self)
 
     case StartCheckout =>
-      cart ! Cart.StartCheckout // TODO : How to handle errors : i.e. Empty Cart
+      cart ! CartManager.StartCheckout
 
-    case Cart.CheckoutStarted(checkout) =>
+    case CartManager.CheckoutStarted(checkout) =>
       context.become(withCheckout(checkout))
   }
 
   def withCheckout(checkout: ActorRef): Receive = LoggingReceive {
     case SelectDeliveryMethod(method) =>
-      checkout ! Checkout.SelectDeliveryMethod(method)
+      checkout ! CheckoutManager.SelectDeliveryMethod(method)
 
     case SelectPaymentMethod(method) =>
-      checkout ! Checkout.SelectPaymentMethod(method)
+      checkout ! CheckoutManager.SelectPaymentMethod(method)
 
     case CancelCheckout =>
       checkout ! CancelCheckout
 
-    case Checkout.Cancelled(cart) =>
+    case CheckoutManager.Cancelled(cart) =>
       context.become(withCart(cart))
 
     case Buy =>
-      checkout ! Checkout.Buy // TODO : How to handle errors : i.e. Methods not selected
+      checkout ! CheckoutManager.Buy // TODO : How to handle errors : i.e. Methods not selected
 
-    case Checkout.PaymentServiceStarted(payment) =>
+    case CheckoutManager.PaymentServiceStarted(payment) =>
       context.become(withPayment(payment))
 
 //    case GetParametersForTest =>
-//      checkout ! Checkout.GetParametersForTest
+//      checkout ! managers.Checkout.GetParametersForTest
 //
 //    case res: (String, String) =>
 //      println(res)
@@ -81,7 +84,7 @@ object OrderManager {
 
   sealed trait Command
 
-  case class AddItem(id: UUID) extends Command
+  case class AddItem(item: Item) extends Command
 
   case class RemoveItem(id: UUID) extends Command
 

@@ -1,5 +1,6 @@
 import akka.actor.ActorSystem
 import akka.testkit.{TestActorRef, TestKit, TestProbe}
+import managers.Checkout
 import org.scalatest.concurrent.Eventually
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
@@ -14,10 +15,10 @@ class CheckoutTest extends TestKit(ActorSystem("CheckoutTest"))
     TestKit.shutdownActorSystem(system)
   }
 
-  "Checkout" should "in uninitialized state" in {
+  "managers.Checkout" should "in uninitialized state" in {
     val checkoutRef = TestActorRef(new Checkout())
     val checkout = checkoutRef.underlyingActor
-
+    checkout.
     val probe = TestProbe()
     probe.send(checkoutRef, Checkout.Start(null))
     expectMsg("")
