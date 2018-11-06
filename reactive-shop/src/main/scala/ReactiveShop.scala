@@ -1,14 +1,22 @@
-import java.util.UUID
+import java.net.URI
 
 import akka.actor.{ActorSystem, Props}
 import managers.OrderManager
+import model.Item
 
 object ReactiveShop extends App {
   val system = ActorSystem("system")
 
   val manager = system.actorOf(Props(new OrderManager()))
 
-  manager ! OrderManager.AddItem(UUID.randomUUID())
+  val apple: Item = Item(URI.create("apple"), "apple", 1)
+  val orange: Item = Item(URI.create("orange"), "orange", 1)
+
+  manager ! OrderManager.AddItem(apple)
+  manager ! OrderManager.AddItem(orange)
+
+  manager ! OrderManager.GetCart
+
   manager ! OrderManager.StartCheckout
 
   Thread.sleep(1000)
@@ -16,14 +24,14 @@ object ReactiveShop extends App {
   manager ! OrderManager.SelectDeliveryMethod("poczta")
   manager ! OrderManager.SelectPaymentMethod("visa")
 
-//  Thread.sleep(2000)
-//
-//  manager ! managers.OrderManager.GetParametersForTest
-
+  Thread.sleep(1000)
 
   manager ! OrderManager.Buy
 
   Thread.sleep(1000)
 
   manager ! OrderManager.Pay
+
+  Thread.sleep(3000)
+  system.terminate()
 }

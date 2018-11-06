@@ -2,66 +2,66 @@ package managers
 
 import akka.actor.{ActorRef, PoisonPill, Props, Timers}
 import akka.event.LoggingReceive
-import akka.pattern.ask
-import akka.util.Timeout
 import managers.CartManager._
-import model.{Cart, Checkout, Item}
+import model.{Cart, Item}
 
-import scala.concurrent._
-import ExecutionContext.Implicits.global
 
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 
 class CartManager(expirationTime: FiniteDuration = 10 seconds) extends Timers {
 
   override def receive: Receive = empty(Cart.empty)
 
   def empty(cart: Cart): Receive = LoggingReceive {
-    case AddItem(item, sender) =>
+    case AddItem(item, replyTo) =>
       timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
-      sender ! ItemAdded(item)
+      replyTo ! ItemAdded(item)
       context.become(nonEmpty(cart.addItem(item)))
+
+    case OrderManager.GetCart(replyTo) =>
+      replyTo ! OrderManager.GotCart(cart)
   }
 
   def nonEmpty(cart: Cart): Receive = LoggingReceive {
-    case AddItem(item, sender) =>
+    case AddItem(item, replyTo) =>
       timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
+      replyTo ! ItemAdded(item)
       context.become(nonEmpty(cart.addItem(item)))
 
-    case RemoveItem(item, count, sender) =>
+    case RemoveItem(item, count, replyTo) =>
       val cartCount: Int = cart.getCount(item)
       if (cartCount <= count) {
         timers.cancel(CartTimerKey)
-        sender ! ItemRemoved(item, count)
+        replyTo ! ItemRemoved(item, count)
         context.become(empty(Cart.empty))
       } else {
         timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
-        sender ! ItemRemoved(item, count)
+        replyTo ! ItemRemoved(item, count)
         context.become(nonEmpty(cart.removeItem(item, count)))
       }
 
     case StartCheckout(orderManager) =>
       timers.cancel(CartTimerKey)
       val checkout = context.actorOf(Props(new CheckoutManager()))
+      checkout ! CheckoutManager.Start(orderManager, self)
 
-      implicit val timeout: Timeout = Timeout(1 second)
-      checkout ? CheckoutManager.Start(orderManager, self) onComplete {
-        case Success(_) =>
-          orderManager ! CheckoutStarted(checkout)
-          context.become(inCheckout(cart, orderManager))
-        case Failure(_) => _
-      }
+    case CheckoutManager.Started(checkout, orderManager) =>
+      orderManager ! CheckoutStarted(checkout)
+      context.become(inCheckout(cart))
 
     case CartTimerExpired =>
       timers.cancel(CartTimerKey)
       context.become(empty(Cart.empty))
+
+    case OrderManager.GetCart(replyTo) =>
+      replyTo ! OrderManager.GotCart(cart)
   }
 
-  def inCheckout(cart: Cart, orderManager: ActorRef): Receive = LoggingReceive {
-    case Checkout.Cancelled =>
+  def inCheckout(cart: Cart): Receive = LoggingReceive {
+    case CheckoutManager.Cancelled =>
+      sender() ! PoisonPill
       context.become(nonEmpty(cart))
-    case Checkout.Closed =>
+    case CheckoutManager.Closed =>
       sender() ! PoisonPill
       context.become(empty(Cart.empty))
   }
@@ -85,9 +85,9 @@ object CartManager {
 
   sealed trait CartEvent
 
-  case class ItemRemoved(item: Item, count: Int) extends CartEvent
-
   case class ItemAdded(item: Item) extends CartEvent
+
+  case class ItemRemoved(item: Item, count: Int) extends CartEvent
 
   case class CheckoutStarted(checkout: ActorRef) extends CartEvent
 

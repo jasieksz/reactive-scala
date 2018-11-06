@@ -1,13 +1,15 @@
 package managers
 
-import java.util.UUID
-
 import akka.actor.{ActorRef, Props, Timers}
 import akka.event.LoggingReceive
+import akka.util.Timeout
 import managers.OrderManager._
-import model.Item
+import model.{Cart, Item}
+
+import scala.concurrent.duration._
 
 class OrderManager extends Timers {
+  implicit val timeout: Timeout = Timeout(1 seconds)
 
   self ! Initialize
 
@@ -26,22 +28,30 @@ class OrderManager extends Timers {
     case AddItem(item) =>
       cart ! CartManager.AddItem(item, self)
 
-    case RemoveItem(item) =>
-      cart ! CartManager.RemoveItem(item, self)
+    case RemoveItem(item, count) =>
+      cart ! CartManager.RemoveItem(item, count, self)
 
     case StartCheckout =>
-      cart ! CartManager.StartCheckout
+      cart ! CartManager.StartCheckout(self)
 
     case CartManager.CheckoutStarted(checkout) =>
       context.become(withCheckout(checkout))
+
+    case GetCart =>
+      cart ! GetCart(self)
+
+    case GotCart(cartData) =>
+      println("CART CONTENT")
+      println(cartData.items)
+
   }
 
   def withCheckout(checkout: ActorRef): Receive = LoggingReceive {
     case SelectDeliveryMethod(method) =>
-      checkout ! CheckoutManager.SelectDeliveryMethod(method)
+      checkout ! CheckoutManager.SelectDeliveryMethod(method, self)
 
     case SelectPaymentMethod(method) =>
-      checkout ! CheckoutManager.SelectPaymentMethod(method)
+      checkout ! CheckoutManager.SelectPaymentMethod(method, self)
 
     case CancelCheckout =>
       checkout ! CancelCheckout
@@ -50,60 +60,58 @@ class OrderManager extends Timers {
       context.become(withCart(cart))
 
     case Buy =>
-      checkout ! CheckoutManager.Buy // TODO : How to handle errors : i.e. Methods not selected
+      checkout ! CheckoutManager.Buy(self)
 
     case CheckoutManager.PaymentServiceStarted(payment) =>
       context.become(withPayment(payment))
-
-//    case GetParametersForTest =>
-//      checkout ! managers.Checkout.GetParametersForTest
-//
-//    case res: (String, String) =>
-//      println(res)
   }
 
   def withPayment(payment: ActorRef): Receive = LoggingReceive {
 
     case Pay =>
-      payment ! Payment.Pay
+      payment ! PaymentManager.Pay(self)
 
-    case Payment.PaymentConfirmed(id) =>
+    case PaymentManager.PaymentConfirmed(_) =>
       context.become(uninitialized())
 
     case CancelPayment =>
-      payment ! CancelPayment
+      payment ! PaymentManager.Cancel(self)
 
-    case Payment.Cancelled(checkout) =>
-      context.become(withCheckout(checkout)) // TODO : Does it work? - can checkout remember cartRef (state)?
+    case PaymentManager.Cancelled(checkout) =>
+      context.become(withCheckout(checkout))
   }
-
-
 }
 
 object OrderManager {
 
-  sealed trait Command
+  sealed trait OrderManagerCommand
 
-  case class AddItem(item: Item) extends Command
+  case class AddItem(item: Item) extends OrderManagerCommand
 
-  case class RemoveItem(id: UUID) extends Command
+  case class RemoveItem(item: Item, count: Int) extends OrderManagerCommand
 
-  case class SelectDeliveryMethod(delivery: String) extends Command
+  case class SelectDeliveryMethod(method: String) extends OrderManagerCommand
 
-  case class SelectPaymentMethod(payment: String) extends Command
+  case class SelectPaymentMethod(method: String) extends OrderManagerCommand
 
-  case object Buy extends Command
+  case object Buy extends OrderManagerCommand
 
-  case object Pay extends Command
+  case object Pay extends OrderManagerCommand
 
-  case object Initialize
+  case object Initialize extends OrderManagerCommand
 
-  case object StartCheckout
+  case object StartCheckout extends OrderManagerCommand
 
-  case object CancelCheckout
+  case object CancelCheckout extends OrderManagerCommand
 
-  case object CancelPayment
+  case object CancelPayment extends OrderManagerCommand
 
-  case object GetParametersForTest
+  case class GetCart(replyTo: ActorRef) extends OrderManagerCommand
+
+  sealed trait OrderManagerEvent
+
+  case object Done extends OrderManagerEvent
+
+  case class GotCart(cart: Cart) extends OrderManagerEvent
 
 }

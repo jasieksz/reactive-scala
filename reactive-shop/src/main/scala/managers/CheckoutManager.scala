@@ -13,25 +13,25 @@ class CheckoutManager(checkoutExpirationTime: FiniteDuration = 10 seconds) exten
 
   def uninitialized(): Receive = LoggingReceive {
     case Start(orderManager, cart) =>
-      cart ! Started
+      cart ! Started(self, orderManager)
       context.become(selectingDeliveryAndPayment(orderManager, cart, Checkout.default))
   }
 
   def selectingDeliveryAndPayment(orderManager: ActorRef, cart: ActorRef, checkout: Checkout): Receive = LoggingReceive {
-    case SelectDeliveryMethod(method, sender) =>
+    case SelectDeliveryMethod(method, replyTo) =>
       timers.startSingleTimer(CheckoutTimerKey, CheckoutTimerExpired, checkoutExpirationTime)
-      sender ! DeliveryMethodSelected(method)
+      replyTo ! DeliveryMethodSelected(method)
       context.become(selectingDeliveryAndPayment(orderManager, cart, checkout.selectDelivery(method)))
 
-    case SelectPaymentMethod(method, sender) =>
+    case SelectPaymentMethod(method, replyTo) =>
       timers.startSingleTimer(CheckoutTimerKey, CheckoutTimerExpired, checkoutExpirationTime)
-      sender ! PaymentMethodSelected(method)
+      replyTo ! PaymentMethodSelected(method)
       context.become(selectingDeliveryAndPayment(orderManager, cart, checkout.selectPayment(method)))
 
-    case Buy(sender) =>
+    case Buy(replyTo) =>
       if (checkout.isReady()) {
         val paymentActor = context.actorOf(Props(new PaymentManager(self)))
-        sender ! PaymentServiceStarted(paymentActor)
+        replyTo ! PaymentServiceStarted(paymentActor)
         timers.cancel(CheckoutTimerKey)
         context.become(processingPayment(orderManager, cart, checkout))
       }
@@ -39,16 +39,14 @@ class CheckoutManager(checkoutExpirationTime: FiniteDuration = 10 seconds) exten
     case Cancel(replyTo) =>
       cart ! Cancelled(cart)
       replyTo ! Cancelled(cart)
-      self ! PoisonPill
 
     case CheckoutTimerExpired =>
       cart ! Cancelled(cart)
       orderManager ! Cancelled(cart)
-      self ! PoisonPill
   }
 
   def processingPayment(orderManager: ActorRef, cart: ActorRef, checkout: Checkout): Receive = LoggingReceive {
-    case PaymentManager.PaymentReceived(_) =>
+    case PaymentManager.PaymentReceived(id) =>
       sender() ! PoisonPill
       cart ! Closed
       orderManager ! Closed
@@ -74,7 +72,7 @@ object CheckoutManager {
 
   sealed trait CheckoutEvent
 
-  case object Started extends CheckoutEvent
+  case class Started(replyTo: ActorRef, orderManager: ActorRef) extends CheckoutEvent
 
   case class DeliveryMethodSelected(method: String) extends CheckoutEvent
 
