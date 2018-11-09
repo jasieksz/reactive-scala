@@ -47,15 +47,10 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
     "start checkout" in {
       val probe = TestProbe()
       val actorRef = system.actorOf(Props(new CartManager()))
-
       actorRef ! AddItem(apple, actorRef)
+
       actorRef ! StartCheckout(probe.ref)
-
-      val msg: AnyRef = probe.receiveOne(3 seconds)
-      assert(msg.isInstanceOf[CartManager.CheckoutStarted])
-
+      probe.expectMsgType[CartManager.CheckoutStarted]
     }
-
   }
-
 }

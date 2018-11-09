@@ -65,6 +65,7 @@ class OrderManager extends Timers {
 
     case PaymentManager.PaymentConfirmed(_) =>
       context.become(uninitialized())
+      // TODO : Kill Cart ?
 
     case CancelPayment =>
       payment ! PaymentManager.Cancel(self)

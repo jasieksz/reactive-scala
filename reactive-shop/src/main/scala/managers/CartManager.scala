@@ -64,6 +64,7 @@ class CartManager(expirationTime: FiniteDuration = 10 seconds) extends Timers {
     case CheckoutManager.Closed =>
       sender() ! PoisonPill
       context.become(empty(Cart.empty))
+      // TODO : Terminate here or wait for termination from OM
   }
 }
 
