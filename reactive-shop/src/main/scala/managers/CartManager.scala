@@ -2,21 +2,53 @@ package managers
 
 import akka.actor.{ActorRef, PoisonPill, Props, Timers}
 import akka.event.LoggingReceive
+import akka.persistence.PersistentActor
 import managers.CartManager._
 import model.{Cart, Item}
 
-
 import scala.concurrent.duration._
 
-class CartManager(expirationTime: FiniteDuration = 10 seconds) extends Timers {
+class CartManager(val persistence: String, expirationTime: FiniteDuration = 10 seconds) extends Timers with PersistentActor {
 
-  override def receive: Receive = empty(Cart.empty)
+  override def receiveRecover: Receive = empty(Cart.empty)
+
+  override def receiveCommand: Receive = empty(Cart.empty)
+
+  override def persistenceId: String = persistence
+
+  private def updateState(event: Event, cart: Cart)(reply: Event => Unit): Unit = {
+    timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
+    reply(event)
+    event match {
+      case ItemAdded(item) =>
+        context.become(nonEmpty(cart.addItem(item)))
+
+      case ItemRemoved(item, count) =>
+        val cartCount: Int = cart.getCount(item)
+        if (count >= cartCount) {
+          timers.cancel(CartTimerKey)
+          context.become(empty(Cart.empty))
+        } else {
+          context.become(nonEmpty(cart.removeItems(item, count)))
+        }
+
+      case CheckoutStarted(_) =>
+        timers.cancel(CartTimerKey)
+
+      case CheckoutManager.Started(_, _) =>
+        context.become(inCheckout(cart))
+
+      case CartTimerExpired =>
+        timers.cancel(CartTimerKey)
+        context.become(empty(Cart.empty))
+
+    }
+  }
 
   def empty(cart: Cart): Receive = LoggingReceive {
+
     case AddItem(item, replyTo) =>
-      timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
-      replyTo ! ItemAdded(item)
-      context.become(nonEmpty(cart.addItem(item)))
+      persist(ItemAdded(item))(event => updateState(event, cart)(event => replyTo ! event))
 
     case OrderManager.GetCart(replyTo) =>
       replyTo ! cart
@@ -24,34 +56,20 @@ class CartManager(expirationTime: FiniteDuration = 10 seconds) extends Timers {
 
   def nonEmpty(cart: Cart): Receive = LoggingReceive {
     case AddItem(item, replyTo) =>
-      timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
-      replyTo ! ItemAdded(item)
-      context.become(nonEmpty(cart.addItem(item)))
+      persist(ItemAdded(item))(event => updateState(event, cart)(event => replyTo ! event))
 
     case RemoveItem(item, count, replyTo) =>
-      val cartCount: Int = cart.getCount(item)
-      if (cartCount <= count) {
-        timers.cancel(CartTimerKey)
-        replyTo ! ItemRemoved(item, count)
-        context.become(empty(Cart.empty))
-      } else {
-        timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
-        replyTo ! ItemRemoved(item, count)
-        context.become(nonEmpty(cart.removeItems(item, count)))
-      }
+      persist(ItemRemoved(item, count))(event => updateState(event, cart)(event => replyTo ! event))
 
     case StartCheckout(orderManager) =>
-      timers.cancel(CartTimerKey)
       val checkout = context.actorOf(Props(new CheckoutManager()))
-      checkout ! CheckoutManager.Start(orderManager, self)
+      persist(CheckoutStarted(checkout))(event => updateState(event, cart)(_ => checkout ! CheckoutManager.Start(orderManager, self)))
 
     case CheckoutManager.Started(checkout, orderManager) =>
-      orderManager ! CheckoutStarted(checkout)
-      context.become(inCheckout(cart))
+      persist(CheckoutManager.Started(checkout, orderManager))(event => updateState(event, cart)(_ => orderManager ! CheckoutStarted(checkout)))
 
     case CartTimerExpired =>
-      timers.cancel(CartTimerKey)
-      context.become(empty(Cart.empty))
+      persist(CartTimerExpired)(event => updateState(event, cart)(event => event))
 
     case OrderManager.GetCart(replyTo) =>
       replyTo ! cart
@@ -64,13 +82,13 @@ class CartManager(expirationTime: FiniteDuration = 10 seconds) extends Timers {
     case CheckoutManager.Closed =>
       sender() ! PoisonPill
       context.become(empty(Cart.empty))
-      // TODO : Terminate here or wait for termination from OM
+    // TODO : Terminate here or wait for termination from OM
   }
 }
 
 object CartManager {
 
-  sealed trait CartCommand
+  sealed trait CartCommand extends Command
 
   case class AddItem(item: Item, replyTo: ActorRef) extends CartCommand
 
@@ -84,7 +102,7 @@ object CartManager {
 
   case object CancelCheckout extends CartCommand
 
-  sealed trait CartEvent
+  sealed trait CartEvent extends Event
 
   case class ItemAdded(item: Item) extends CartEvent
 

@@ -9,8 +9,6 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
-import scala.concurrent.duration._
-
 
 class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
   with WordSpecLike
@@ -26,7 +24,7 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
   "A cart" should {
     "add item" in {
       val probe = TestProbe()
-      val actorRef = system.actorOf(Props(new CartManager()))
+      val actorRef = system.actorOf(Props(new CartManager("id-2")))
 
       actorRef ! AddItem(apple, probe.ref)
       probe.expectMsg(CartManager.ItemAdded(apple))
@@ -34,7 +32,7 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
 
     "remove item" in {
       val probe = TestProbe()
-      val actorRef = system.actorOf(Props(new CartManager()))
+      val actorRef = system.actorOf(Props(new CartManager("id-3")))
 
       actorRef ! AddItem(apple, actorRef)
       actorRef ! RemoveItem(apple, 1, actorRef)
@@ -46,7 +44,7 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
 
     "start checkout" in {
       val probe = TestProbe()
-      val actorRef = system.actorOf(Props(new CartManager()))
+      val actorRef = system.actorOf(Props(new CartManager("id-4")))
       actorRef ! AddItem(apple, actorRef)
 
       actorRef ! StartCheckout(probe.ref)

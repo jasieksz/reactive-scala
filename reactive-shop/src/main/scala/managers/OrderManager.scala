@@ -17,7 +17,7 @@ class OrderManager extends Timers {
 
   def uninitialized(): Receive = LoggingReceive {
     case Initialize =>
-      val cart = context.actorOf(Props(new CartManager()))
+      val cart = context.actorOf(Props(new CartManager("id-1")))
       context.become(withCart(cart))
 
     case CheckoutManager.Closed =>
@@ -77,7 +77,7 @@ class OrderManager extends Timers {
 
 object OrderManager {
 
-  sealed trait OrderManagerCommand
+  sealed trait OrderManagerCommand extends Command
 
   case class AddItem(item: Item) extends OrderManagerCommand
 
@@ -101,7 +101,7 @@ object OrderManager {
 
   case class GetCart(replyTo: ActorRef) extends OrderManagerCommand
 
-  sealed trait OrderManagerEvent
+  sealed trait OrderManagerEvent extends Event
 
   case object Done extends OrderManagerEvent
 }

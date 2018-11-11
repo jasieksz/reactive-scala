@@ -1,0 +1,5 @@
+package managers
+
+trait Event {
+
+}

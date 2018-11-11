@@ -58,7 +58,7 @@ class CheckoutManager(checkoutExpirationTime: FiniteDuration = 10 seconds) exten
 
 object CheckoutManager {
 
-  sealed trait CheckoutCommand
+  sealed trait CheckoutCommand extends Command
 
   case class Start(orderManager: ActorRef, cart: ActorRef) extends CheckoutCommand
 
@@ -70,7 +70,7 @@ object CheckoutManager {
 
   case class Cancel(replyTo: ActorRef) extends CheckoutCommand
 
-  sealed trait CheckoutEvent
+  sealed trait CheckoutEvent extends Event
 
   case class Started(replyTo: ActorRef, orderManager: ActorRef) extends CheckoutEvent
 

@@ -37,13 +37,13 @@ class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration =
 
 object PaymentManager {
 
-  sealed trait PaymentCommand
+  sealed trait PaymentCommand extends Command
 
   case class Pay(replyTo: ActorRef) extends PaymentCommand
 
   case class Cancel(replyTo: ActorRef) extends PaymentCommand
 
-  sealed trait PaymentEvent
+  sealed trait PaymentEvent extends Event
 
   case class PaymentConfirmed(id: UUID) extends PaymentEvent
 
