@@ -27,6 +27,10 @@ case class Cart(items: Map[Item, Int]) {
     items.getOrElse(item, 0)
   }
 
+  def getSize(): Int = {
+    items.values.reduceLeft(_ + _)
+  }
+
 }
 
 object Cart {

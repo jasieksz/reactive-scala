@@ -1,10 +1,10 @@
 package managers
 
-import akka.actor.{ActorRef, Props, Timers}
+import akka.actor.{ActorRef, PoisonPill, Props, Timers}
 import akka.event.LoggingReceive
 import akka.util.Timeout
 import managers.OrderManager._
-import model.{Item}
+import model.Item
 
 import scala.concurrent.duration._
 
@@ -18,6 +18,9 @@ class OrderManager extends Timers {
   def uninitialized(): Receive = LoggingReceive {
     case Initialize =>
       val cart = context.actorOf(Props(new CartManager("id-1")))
+      cart ! CartManager.StartCart(self)
+
+    case CartManager.CartStarted(cart) =>
       context.become(withCart(cart))
 
     case CheckoutManager.Closed =>
@@ -48,7 +51,7 @@ class OrderManager extends Timers {
     case CancelCheckout =>
       checkout ! CancelCheckout
 
-    case CheckoutManager.Cancelled(cart) =>
+    case CheckoutManager.CheckoutCancelled(cart) =>
       context.become(withCart(cart))
 
     case Buy =>
@@ -65,6 +68,7 @@ class OrderManager extends Timers {
 
     case PaymentManager.PaymentConfirmed(_) =>
       context.become(uninitialized())
+      self ! PoisonPill
       // TODO : Kill Cart ?
 
     case CancelPayment =>

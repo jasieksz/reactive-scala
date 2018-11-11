@@ -12,8 +12,8 @@ class CheckoutManager(checkoutExpirationTime: FiniteDuration = 10 seconds) exten
   override def receive: Receive = uninitialized()
 
   def uninitialized(): Receive = LoggingReceive {
-    case Start(orderManager, cart) =>
-      cart ! Started(self, orderManager)
+    case StartCheckout(orderManager, cart) =>
+      cart ! CheckoutStarted(self, orderManager)
       context.become(selectingDeliveryAndPayment(orderManager, cart, Checkout.default))
   }
 
@@ -36,13 +36,13 @@ class CheckoutManager(checkoutExpirationTime: FiniteDuration = 10 seconds) exten
         context.become(processingPayment(orderManager, cart, checkout))
       }
 
-    case Cancel(replyTo) =>
-      cart ! Cancelled(cart)
-      replyTo ! Cancelled(cart)
+    case CancelCheckout(replyTo) =>
+      cart ! CheckoutCancelled(cart)
+      replyTo ! CheckoutCancelled(cart)
 
     case CheckoutTimerExpired =>
-      cart ! Cancelled(cart)
-      orderManager ! Cancelled(cart)
+      cart ! CheckoutCancelled(cart)
+      orderManager ! CheckoutCancelled(cart)
   }
 
   def processingPayment(orderManager: ActorRef, cart: ActorRef, checkout: Checkout): Receive = LoggingReceive {
@@ -60,7 +60,7 @@ object CheckoutManager {
 
   sealed trait CheckoutCommand extends Command
 
-  case class Start(orderManager: ActorRef, cart: ActorRef) extends CheckoutCommand
+  case class StartCheckout(orderManager: ActorRef, cart: ActorRef) extends CheckoutCommand
 
   case class SelectDeliveryMethod(method: String, replyTo: ActorRef) extends CheckoutCommand
 
@@ -68,11 +68,11 @@ object CheckoutManager {
 
   case class Buy(replyTo: ActorRef) extends CheckoutCommand
 
-  case class Cancel(replyTo: ActorRef) extends CheckoutCommand
+  case class CancelCheckout(replyTo: ActorRef) extends CheckoutCommand
 
   sealed trait CheckoutEvent extends Event
 
-  case class Started(replyTo: ActorRef, orderManager: ActorRef) extends CheckoutEvent
+  case class CheckoutStarted(replyTo: ActorRef, orderManager: ActorRef) extends CheckoutEvent
 
   case class DeliveryMethodSelected(method: String) extends CheckoutEvent
 
@@ -80,7 +80,7 @@ object CheckoutManager {
 
   case class PaymentServiceStarted(payment: ActorRef) extends CheckoutEvent
 
-  case class Cancelled(cart: ActorRef) extends CheckoutEvent
+  case class CheckoutCancelled(cart: ActorRef) extends CheckoutEvent
 
   case object Closed extends CheckoutEvent
 

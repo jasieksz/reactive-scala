@@ -1,7 +1,9 @@
 import java.net.URI
 
 import akka.actor.{ActorSystem, Props}
-import managers.OrderManager
+import managers.CartManager.{AddItem, CartStarted, RemoveItem, StartCart}
+import managers.OrderManager.GetCart
+import managers.{CartManager, OrderManager}
 import model.Item
 
 object ReactiveShop extends App {
@@ -12,10 +14,10 @@ object ReactiveShop extends App {
   val apple: Item = Item(URI.create("apple"), "apple", 1)
   val orange: Item = Item(URI.create("orange"), "orange", 1)
 
+  Thread.sleep(1000)
+
   manager ! OrderManager.AddItem(apple)
   manager ! OrderManager.AddItem(orange)
-
-  manager ! OrderManager.GetCart
 
   manager ! OrderManager.StartCheckout
 
@@ -33,5 +35,6 @@ object ReactiveShop extends App {
   manager ! OrderManager.Pay
 
   Thread.sleep(3000)
+
   system.terminate()
 }

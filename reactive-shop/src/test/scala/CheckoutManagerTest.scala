@@ -21,8 +21,8 @@ class CheckoutManagerTest extends TestKit(ActorSystem("CheckoutManagerTest"))
       val orderManagerProbe = TestProbe()
       val cartManagerProbe = TestProbe()
       val checkout = system.actorOf(Props(new CheckoutManager()))
-      checkout ! CheckoutManager.Start(orderManagerProbe.ref, cartManagerProbe.ref)
-      cartManagerProbe.expectMsgType[CheckoutManager.Started]
+      checkout ! CheckoutManager.StartCheckout(orderManagerProbe.ref, cartManagerProbe.ref)
+      cartManagerProbe.expectMsgType[CheckoutManager.CheckoutStarted]
 
       checkout ! CheckoutManager.SelectDeliveryMethod("poczta", orderManagerProbe.ref)
       orderManagerProbe.expectMsg(CheckoutManager.DeliveryMethodSelected("poczta"))
