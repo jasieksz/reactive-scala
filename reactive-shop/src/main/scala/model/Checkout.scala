@@ -16,5 +16,5 @@ case class Checkout(delivery: String, payment: String) {
 }
 
 object Checkout {
-  val default = Checkout("", "")
+  val empty = Checkout("", "")
 }
