@@ -1,6 +1,6 @@
 import java.util.UUID
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorSystem, PoisonPill, Props}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import managers.{CheckoutManager, PaymentManager}
 import org.scalatest.concurrent.ScalaFutures
@@ -20,22 +20,33 @@ class CheckoutManagerTest extends TestKit(ActorSystem("CheckoutManagerTest"))
     "close after receiving payment" in {
       val orderManagerProbe = TestProbe()
       val cartManagerProbe = TestProbe()
-      val checkout = system.actorOf(Props(new CheckoutManager()))
-      checkout ! CheckoutManager.StartCheckout(orderManagerProbe.ref, cartManagerProbe.ref)
-      cartManagerProbe.expectMsgType[CheckoutManager.CheckoutStarted]
+
+      val checkout = system.actorOf(Props(new CheckoutManager("test-id-1", cartManagerProbe.ref, orderManagerProbe.ref)))
+      checkout ! CheckoutManager.StartCheckout(cartManagerProbe.ref, orderManagerProbe.ref)
+      cartManagerProbe.expectMsg(CheckoutManager.CheckoutStarted(checkout, orderManagerProbe.ref))
 
       checkout ! CheckoutManager.SelectDeliveryMethod("poczta", orderManagerProbe.ref)
       orderManagerProbe.expectMsg(CheckoutManager.DeliveryMethodSelected("poczta"))
 
-      checkout ! CheckoutManager.SelectPaymentMethod("visa", orderManagerProbe.ref)
+      checkout ! "print"
+      checkout ! "snap"
+      Thread.sleep(3000)
+      checkout ! PoisonPill
+
+      val restoredCheckout = system.actorOf(Props(new CheckoutManager("test-id-1", cartManagerProbe.ref, orderManagerProbe.ref)))
+
+      Thread.sleep(2000)
+
+
+      restoredCheckout ! CheckoutManager.SelectPaymentMethod("visa", orderManagerProbe.ref)
       orderManagerProbe.expectMsg(CheckoutManager.PaymentMethodSelected("visa"))
 
-      checkout ! CheckoutManager.Buy(orderManagerProbe.ref)
+      restoredCheckout ! CheckoutManager.Buy(orderManagerProbe.ref)
       orderManagerProbe.expectMsgType[CheckoutManager.PaymentServiceStarted]
 
-      checkout ! PaymentManager.PaymentReceived(UUID.randomUUID())
-      cartManagerProbe.expectMsg(CheckoutManager.Closed)
-      orderManagerProbe.expectMsg(CheckoutManager.Closed)
+      restoredCheckout ! PaymentManager.PaymentReceived(UUID.randomUUID())
+      cartManagerProbe.expectMsg(CheckoutManager.CheckoutClosed)
+      orderManagerProbe.expectMsg(CheckoutManager.CheckoutClosed)
     }
   }
 }

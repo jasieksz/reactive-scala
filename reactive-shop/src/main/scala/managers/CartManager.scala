@@ -8,13 +8,20 @@ import model.{Cart, Item}
 
 import scala.concurrent.duration._
 
-class CartManager(val persistence: String, expirationTime: FiniteDuration = 30 seconds) extends Timers with PersistentActor {
+class CartManager(val persistence: String,
+                  expirationTime: FiniteDuration = 30 seconds) extends Timers with PersistentActor {
 
-  override def receiveRecover: Receive = cartReceiveRecover(Cart.empty)
+  override def persistenceId: String = persistence
 
   override def receiveCommand: Receive = uninitialized()
 
-  override def persistenceId: String = persistence
+  override def receiveRecover: Receive = {
+    case event: Event =>
+      updateState(event, Cart.empty)(event => event)
+    case SnapshotOffer(_, snapshot: Cart) => {
+      if (snapshot.getSize > 0) context.become(nonEmpty(snapshot)) else context.become(empty(Cart.empty))
+    }
+  }
 
   private def updateState(event: Event, cart: Cart)(reply: Event => Unit): Unit = {
     timers.startSingleTimer(CartTimerKey, CartTimerExpired, expirationTime)
@@ -48,15 +55,6 @@ class CartManager(val persistence: String, expirationTime: FiniteDuration = 30 s
     }
   }
 
-  def cartReceiveRecover(cart: Cart): Receive = {
-    case event: Event =>
-      println("RECOVER : " + event)
-      updateState(event, cart)(event => event)
-    case SnapshotOffer(_, snapshot: Cart) => {
-      if (snapshot.getSize > 0) context.become(nonEmpty(snapshot)) else context.become(empty(Cart.empty))
-    }
-  }
-
   def uninitialized(): Receive = LoggingReceive {
     case StartCart(replyTo) =>
       persist(CartStarted(self))(event => updateState(event, Cart.empty)(event => replyTo ! event))
@@ -69,10 +67,10 @@ class CartManager(val persistence: String, expirationTime: FiniteDuration = 30 s
 
     case OrderManager.GetCart(replyTo) =>
       replyTo ! cart
-      println("CURRENT STATE : " + cart)
+      println("CURRENT STATE : " + cart + "\n")
 
     case "snap" =>
-      println("SAVING")
+      println("\nSAVING")
       saveSnapshot(cart)
   }
 
@@ -84,8 +82,11 @@ class CartManager(val persistence: String, expirationTime: FiniteDuration = 30 s
       persist(ItemRemoved(item, count))(event => updateState(event, cart)(event => replyTo ! event))
 
     case StartCheckout(orderManager) =>
-      val checkout = context.actorOf(Props(new CheckoutManager()))
-      persist(CheckoutStarted(checkout))(event => updateState(event, cart)(_ => checkout ! CheckoutManager.StartCheckout(orderManager, self)))
+      if (cart.getSize() > 0) {
+        saveSnapshot(cart)
+        val checkout = context.actorOf(Props(new CheckoutManager(persistence + "checkout", self, orderManager)))
+        persist(CheckoutStarted(checkout))(event => updateState(event, cart)(_ => checkout ! CheckoutManager.StartCheckout(self, orderManager)))
+      }
 
     case CheckoutManager.CheckoutStarted(checkout, orderManager) =>
       persist(CheckoutManager.CheckoutStarted(checkout, orderManager))(event => updateState(event, cart)(_ => orderManager ! CheckoutStarted(checkout)))
@@ -95,10 +96,10 @@ class CartManager(val persistence: String, expirationTime: FiniteDuration = 30 s
 
     case OrderManager.GetCart(replyTo) =>
       replyTo ! cart
-      println("CURRENT STATE : " + cart)
+      println("CURRENT STATE : " + cart + "\n")
 
     case "snap" =>
-      println("SAVING")
+      println("SAVING\n")
       saveSnapshot(cart)
   }
 
@@ -106,10 +107,10 @@ class CartManager(val persistence: String, expirationTime: FiniteDuration = 30 s
     case CheckoutManager.CheckoutCancelled =>
       sender() ! PoisonPill
       context.become(nonEmpty(cart))
-    case CheckoutManager.Closed =>
+    case CheckoutManager.CheckoutClosed =>
       sender() ! PoisonPill
-      context.become(empty(Cart.empty))
-    // TODO : Terminate here or wait for termination from OM
+      context.become(uninitialized())
+      // OM sends PP
   }
 }
 

@@ -21,12 +21,12 @@ class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration =
       checkout ! PaymentReceived(id)
 
     case Cancel(replyTo) =>
-      replyTo ! Cancelled(checkout)
-      checkout ! Cancelled(checkout)
+      replyTo ! PaymentCancelled(checkout)
+      checkout ! PaymentCancelled(checkout)
       context.become(cancelled())
 
     case PaymentTimerExpired =>
-      checkout ! Cancelled(checkout)
+      checkout ! PaymentCancelled(checkout)
       context.become(cancelled())
   }
 
@@ -49,7 +49,7 @@ object PaymentManager {
 
   case class PaymentReceived(id: UUID) extends PaymentEvent
 
-  case class Cancelled(checkout: ActorRef) extends PaymentEvent
+  case class PaymentCancelled(checkout: ActorRef) extends PaymentEvent
 
   case object PaymentTimerExpired extends PaymentEvent
 

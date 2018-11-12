@@ -1,9 +1,7 @@
 import java.net.URI
 
 import akka.actor.{ActorSystem, Props}
-import managers.CartManager.{AddItem, CartStarted, RemoveItem, StartCart}
-import managers.OrderManager.GetCart
-import managers.{CartManager, OrderManager}
+import managers.OrderManager
 import model.Item
 
 object ReactiveShop extends App {

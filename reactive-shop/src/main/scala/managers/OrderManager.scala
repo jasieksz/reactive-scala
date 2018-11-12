@@ -23,7 +23,7 @@ class OrderManager extends Timers {
     case CartManager.CartStarted(cart) =>
       context.become(withCart(cart))
 
-    case CheckoutManager.Closed =>
+    case CheckoutManager.CheckoutClosed =>
       self ! Initialize
   }
 
@@ -38,10 +38,10 @@ class OrderManager extends Timers {
       cart ! CartManager.StartCheckout(self)
 
     case CartManager.CheckoutStarted(checkout) =>
-      context.become(withCheckout(checkout))
+      context.become(withCheckout(cart, checkout))
   }
 
-  def withCheckout(checkout: ActorRef): Receive = LoggingReceive {
+  def withCheckout(cart: ActorRef, checkout: ActorRef): Receive = LoggingReceive {
     case SelectDeliveryMethod(method) =>
       checkout ! CheckoutManager.SelectDeliveryMethod(method, self)
 
@@ -58,24 +58,23 @@ class OrderManager extends Timers {
       checkout ! CheckoutManager.Buy(self)
 
     case CheckoutManager.PaymentServiceStarted(payment) =>
-      context.become(withPayment(payment))
+      context.become(withPayment(cart, payment))
   }
 
-  def withPayment(payment: ActorRef): Receive = LoggingReceive {
+  def withPayment(cart: ActorRef, payment: ActorRef): Receive = LoggingReceive {
 
     case Pay =>
       payment ! PaymentManager.Pay(self)
 
     case PaymentManager.PaymentConfirmed(_) =>
+      cart ! PoisonPill
       context.become(uninitialized())
-      self ! PoisonPill
-      // TODO : Kill Cart ?
 
     case CancelPayment =>
       payment ! PaymentManager.Cancel(self)
 
-    case PaymentManager.Cancelled(checkout) =>
-      context.become(withCheckout(checkout))
+    case PaymentManager.PaymentCancelled(checkout) =>
+      context.become(withCheckout(cart, checkout))
   }
 }
 
