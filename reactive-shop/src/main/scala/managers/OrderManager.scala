@@ -1,15 +1,22 @@
 package managers
 
-import akka.actor.{ActorRef, PoisonPill, Props, Timers}
+import akka.actor.{ActorRef, ActorSelection, PoisonPill, Props, Timers}
 import akka.event.LoggingReceive
 import akka.util.Timeout
 import managers.OrderManager._
 import model.Item
+import akka.pattern.ask
+import catalog.CatalogSupervisor.GetItem
 
 import scala.concurrent.duration._
+import scala.util.Success
+import scala.concurrent.ExecutionContext.Implicits.global
+
 
 class OrderManager extends Timers {
   implicit val timeout: Timeout = Timeout(1 seconds)
+  val catalogSupervisorPath: String = "akka.tcp://catalog_system@127.0.0.1:3000/user/master"
+  val catalogSupervisor: ActorSelection = context.actorSelection(catalogSupervisorPath)
 
   self ! Initialize
 
@@ -29,7 +36,9 @@ class OrderManager extends Timers {
 
   def withCart(cart: ActorRef): Receive = LoggingReceive {
     case AddItem(item) =>
-      cart ! CartManager.AddItem(item, self)
+      catalogSupervisor ? GetItem(item, 1, self) onComplete {
+        case Success(value) => cart ! CartManager.AddItem(item, self)
+      }
 
     case RemoveItem(item, count) =>
       cart ! CartManager.RemoveItem(item, count, self)
