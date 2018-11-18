@@ -7,7 +7,7 @@ import akka.actor.SupervisorStrategy.{Escalate, Restart}
 import akka.actor.{Actor, ActorRef, OneForOneStrategy, Props}
 import akka.event.LoggingReceive
 import akka.routing.RoundRobinPool
-import catalog.CatalogSupervisor.{CatalogOperationFailure, CatalogOperationSuccess, GetItem, LookUpItem}
+import catalog.CatalogSupervisor.{CatalogOperationSuccess, GetItem, LookUpItem}
 import com.typesafe.config.ConfigFactory
 import managers.{Command, Event}
 import model.Item
@@ -18,22 +18,25 @@ import scala.io.{BufferedSource, Source}
 
 class CatalogSupervisor extends Actor {
 
-  val config = ConfigFactory.parseFile(new File("resources/catalog_application.conf"))
   val router: ActorRef = context.actorOf(RoundRobinPool(4).props(Props[SearchWorker]), "router")
 
   override def receive: Receive = uninitialized()
 
   def uninitialized(): Receive = {
     case _ =>
-      val dbPath: String = "resources/product_db"
-      val bufferedSource: BufferedSource = Source.fromFile(dbPath)
-      val items: Map[URI, Int] = bufferedSource.getLines()
-        .map(line => (URI.create(line.split(",")(0)), 10)).toMap
+      val bufferedSource: BufferedSource = Source.fromResource("product_db")
+      val items: Map[URI, Int] =
+        bufferedSource
+          .getLines()
+          .drop(1)
+          .map(line => line.replaceAll("\"", ""))
+          .map(line => (URI.create(line.split(",")(0)), 10))
+          .toMap
 
       context.become(initialized(Catalog(items)))
   }
 
-  def initialized(catalog: Catalog): LoggingReceive = {
+  def initialized(catalog: Catalog): Receive = LoggingReceive {
     case LookUpItem(name, replyTo) =>
       router ! LookUpItem(name, replyTo)
 
@@ -43,7 +46,6 @@ class CatalogSupervisor extends Actor {
         replyTo ! CatalogOperationSuccess
         context.become(initialized(result._1))
       } // Failure is handled by replyTo
-
 
   }
 

@@ -6,16 +6,16 @@ import akka.util.Timeout
 import managers.OrderManager._
 import model.Item
 import akka.pattern.ask
-import catalog.CatalogSupervisor.GetItem
+import catalog.CatalogSupervisor.{GetItem, LookUpItem, LookUpResult}
 
 import scala.concurrent.duration._
-import scala.util.Success
+import scala.util.{Failure, Success}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 
 class OrderManager extends Timers {
   implicit val timeout: Timeout = Timeout(1 seconds)
-  val catalogSupervisorPath: String = "akka.tcp://catalog_system@127.0.0.1:3000/user/master"
+  val catalogSupervisorPath: String = "akka.tcp://catalog@127.0.0.1:3000/user/catalogSup"
   val catalogSupervisor: ActorSelection = context.actorSelection(catalogSupervisorPath)
 
   self ! Initialize
@@ -37,7 +37,8 @@ class OrderManager extends Timers {
   def withCart(cart: ActorRef): Receive = LoggingReceive {
     case AddItem(item) =>
       catalogSupervisor ? GetItem(item, 1, self) onComplete {
-        case Success(value) => cart ! CartManager.AddItem(item, self)
+        case Success(_) => cart ! CartManager.AddItem(item, self)
+        case Failure(_) => println("DUPA FAILURE IN OM")
       }
 
     case RemoveItem(item, count) =>
@@ -48,6 +49,17 @@ class OrderManager extends Timers {
 
     case CartManager.CheckoutStarted(checkout) =>
       context.become(withCheckout(cart, checkout))
+
+    case LookUpItem(item, _) =>
+      catalogSupervisor.resolveOne(10 second) onComplete {
+        case Success(value) => println("SUC :" + value)
+        case Failure(ex) => ex.printStackTrace()
+      }
+      catalogSupervisor ! LookUpItem(item, self)
+
+    case LookUpResult(items) =>
+      println("CATALOG RESULT : ")
+      println(items)
   }
 
   def withCheckout(cart: ActorRef, checkout: ActorRef): Receive = LoggingReceive {
