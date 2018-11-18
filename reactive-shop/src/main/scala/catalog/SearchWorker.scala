@@ -9,7 +9,7 @@ class SearchWorker(catalog: Catalog) extends Actor {
   override def receive: Receive = LoggingReceive {
     case SearchItem(keyWords, replyTo) =>
       val response = catalog.search(keyWords)
-      replyTo ! SearchResult(response)
+      sender() ! SearchResult(response) // TODO : Change to replyTo
   }
 }
 

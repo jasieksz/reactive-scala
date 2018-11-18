@@ -1,24 +1,38 @@
 import akka.actor.{ActorSystem, Props}
-import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import catalog.CatalogSupervisor
+import akka.pattern.ask
+import akka.testkit.TestProbe
+import akka.util.Timeout
 import catalog.CatalogSupervisor.{SearchItem, SearchResult}
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
+import catalog.{Catalog, SearchWorker}
+import com.typesafe.config.ConfigFactory
+import org.scalatest.{AsyncFlatSpec, Matchers}
+
+import scala.concurrent.duration._
 
 
-class CatalogSupervisorTest extends TestKit(ActorSystem("CatalogSupervisorTest"))
-  with WordSpecLike
-  with BeforeAndAfterAll
-  with ImplicitSender
-  with ScalaFutures
-  with Matchers {
+class CatalogSupervisorTest extends AsyncFlatSpec with Matchers {
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig(timeout = Span(5000, Seconds))
+  implicit val timeout: Timeout = 3.second
 
-  "A catalog" should {
-    "add item" in {
-      val probe = TestProbe()
+  "A catalog supervisor" should
+    "find items" in {
+    val config = ConfigFactory.load()
+
+    val catalogSystem = ActorSystem("Catalog", config.getConfig("catalog").withFallback(config))
+    catalogSystem.actorOf(Props(new SearchWorker(new Catalog())), "searchworker")
+
+    val actorSystem = ActorSystem("system")
+    val catalogSupervisor = actorSystem.actorSelection("akka.tcp://Catalog@127.0.0.1:2554/user/searchworker")
+
+    val probe = TestProbe()(actorSystem)
+    val query = SearchItem(List("Fanta"), probe.ref)
+
+    for {
+      productCatalogActorRef <- catalogSupervisor.resolveOne()
+      items <- (productCatalogActorRef ? query).mapTo[SearchResult]
+    } yield {
+      println(items)
+      assert(items.items.size == 10)
     }
 
   }

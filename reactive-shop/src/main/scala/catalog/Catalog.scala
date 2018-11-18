@@ -27,4 +27,8 @@ class Catalog() {
       .take(10)
       .map(_._1)
   }
+
+  def size: Int = {
+    itemsMap.keys.toSeq.length
+  }
 }

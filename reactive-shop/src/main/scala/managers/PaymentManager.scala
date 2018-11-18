@@ -2,40 +2,46 @@ package managers
 
 import java.util.UUID
 
-import akka.actor.{ActorRef, ActorSystem, Timers}
+import akka.actor.{ActorRef, ActorSystem, PoisonPill, Timers}
 import akka.event.LoggingReceive
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
+import akka.http.scaladsl.model.HttpRequest
+import akka.stream.{ActorMaterializer, ActorMaterializerSettings}
+import akka.util.ByteString
 import managers.PaymentManager._
 
-import scala.concurrent.Future
-import scala.concurrent.duration._
-import scala.util.{Failure, Success}
-
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 
-class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration = 10 seconds) extends Timers {
+class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration = 20 seconds) extends Timers {
 
   implicit val system: ActorSystem = context.system
+  final implicit val materializer: ActorMaterializer = ActorMaterializer(ActorMaterializerSettings(context.system))
 
-  val paymentServicePath = "localhost:1234/payment"
+  val paymentServicePath = "http://localhost:1234/payment"
 
   override def receive: Receive = unnamed()
 
   def unnamed(): Receive = LoggingReceive {
     case Pay(replyTo) =>
       timers.startSingleTimer(PaymentTimerKey, PaymentTimerExpired, paymentExpirationTime)
-      val id = UUID.randomUUID()
+      for {
+        response <- Http().singleRequest(HttpRequest(uri = paymentServicePath))
+        result <- response.entity.dataBytes.runFold(ByteString(""))(_ ++ _).map(body => body.utf8String)
+      } yield {
+        result match {
+          case "OK" =>
+            println("OKI")
+            val id = UUID.randomUUID()
+            replyTo ! PaymentConfirmed(id)
+            checkout ! PaymentReceived(id)
 
-      val response: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = paymentServicePath))
-      response onComplete {
-        case Success(res) =>
-          println(res)
-          replyTo ! PaymentConfirmed(id)
-          checkout ! PaymentReceived(id)
-        case Failure(ex) =>
-          ex.printStackTrace()
+          case "ERR" =>
+            println("BOOOM")
+            throw new NullPointerException("boom!")
+            // TODO : SupervisorStrategy in parent
+        }
       }
 
     case Cancel(replyTo) =>
@@ -49,7 +55,7 @@ class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration =
   }
 
   def cancelled(): Receive = LoggingReceive {
-    case _ =>
+    case _ => self ! PoisonPill
   }
 }
 
