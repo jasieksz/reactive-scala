@@ -1,22 +1,22 @@
 package managers
 
-import akka.actor.{ActorRef, ActorSelection, PoisonPill, Props, Timers}
+import akka.actor.{ActorRef, PoisonPill, Props, Timers}
 import akka.event.LoggingReceive
 import akka.util.Timeout
 import managers.OrderManager._
 import model.Item
 import akka.pattern.ask
-import catalog.CatalogSupervisor.{GetItem, LookUpItem, LookUpResult}
+import catalog.CatalogSupervisor
+import catalog.CatalogSupervisor.SearchResult
 
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 
 class OrderManager extends Timers {
   implicit val timeout: Timeout = Timeout(1 seconds)
-  val catalogSupervisorPath: String = "akka.tcp://catalog@127.0.0.1:3000/user/catalogSup"
-  val catalogSupervisor: ActorSelection = context.actorSelection(catalogSupervisorPath)
+
+  val productCatalog = context.actorSelection("akka.tcp://catalog@127.0.0.1:2554/catalog/user/catalogsupervisor")
 
   self ! Initialize
 
@@ -36,10 +36,7 @@ class OrderManager extends Timers {
 
   def withCart(cart: ActorRef): Receive = LoggingReceive {
     case AddItem(item) =>
-      catalogSupervisor ? GetItem(item, 1, self) onComplete {
-        case Success(_) => cart ! CartManager.AddItem(item, self)
-        case Failure(_) => println("DUPA FAILURE IN OM")
-      }
+      cart ! CartManager.AddItem(item, self)
 
     case RemoveItem(item, count) =>
       cart ! CartManager.RemoveItem(item, count, self)
@@ -50,16 +47,15 @@ class OrderManager extends Timers {
     case CartManager.CheckoutStarted(checkout) =>
       context.become(withCheckout(cart, checkout))
 
-    case LookUpItem(item, _) =>
-      catalogSupervisor.resolveOne(10 second) onComplete {
-        case Success(value) => println("SUC :" + value)
-        case Failure(ex) => ex.printStackTrace()
+    case SearchItem(keyWords) =>
+      println(productCatalog.anchorPath)
+      productCatalog ! CatalogSupervisor.SearchItem(keyWords, self)
+      for {
+        productCatalogActorRef <- productCatalog.resolveOne()
+        items <- (productCatalogActorRef ? CatalogSupervisor.SearchItem(keyWords, self)).mapTo[SearchResult]
+      } yield {
+        println(items)
       }
-      catalogSupervisor ! LookUpItem(item, self)
-
-    case LookUpResult(items) =>
-      println("CATALOG RESULT : ")
-      println(items)
   }
 
   def withCheckout(cart: ActorRef, checkout: ActorRef): Receive = LoggingReceive {
@@ -125,7 +121,10 @@ object OrderManager {
 
   case class GetCart(replyTo: ActorRef) extends OrderManagerCommand
 
+  case class SearchItem(keyWords: List[String]) extends OrderManagerCommand
+
   sealed trait OrderManagerEvent extends Event
 
   case object Done extends OrderManagerEvent
+
 }

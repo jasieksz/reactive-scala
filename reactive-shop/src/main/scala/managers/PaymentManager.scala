@@ -2,14 +2,24 @@ package managers
 
 import java.util.UUID
 
-import akka.actor.{ActorRef, Timers}
+import akka.actor.{ActorRef, ActorSystem, Timers}
 import akka.event.LoggingReceive
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import managers.PaymentManager._
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 
 class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration = 10 seconds) extends Timers {
+
+  implicit val system: ActorSystem = context.system
+
+  val paymentServicePath = "localhost:1234/payment"
 
   override def receive: Receive = unnamed()
 
@@ -17,8 +27,16 @@ class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration =
     case Pay(replyTo) =>
       timers.startSingleTimer(PaymentTimerKey, PaymentTimerExpired, paymentExpirationTime)
       val id = UUID.randomUUID()
-      replyTo ! PaymentConfirmed(id)
-      checkout ! PaymentReceived(id)
+
+      val response: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = paymentServicePath))
+      response onComplete {
+        case Success(res) =>
+          println(res)
+          replyTo ! PaymentConfirmed(id)
+          checkout ! PaymentReceived(id)
+        case Failure(ex) =>
+          ex.printStackTrace()
+      }
 
     case Cancel(replyTo) =>
       replyTo ! PaymentCancelled(checkout)

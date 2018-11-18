@@ -1,32 +1,18 @@
 package catalog
 
-import akka.actor.{ActorSystem, PoisonPill, Props}
+import akka.actor.{ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
+
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 object CatalogApp extends App {
 
-  val config = ConfigFactory.load("catalog_application.conf")
-  val system = ActorSystem("catalog", config)
+  val config = ConfigFactory.load()
+  val catalogSystem = ActorSystem("catalog", config.getConfig("catalog").withFallback(config))
 
+  val catalog = catalogSystem.actorOf(Props(new CatalogSupervisor()), "catalogsupervisor")
 
-  val catalog = system.actorOf(Props(new CatalogSupervisor()), "catalogSup")
-  println(system.child("catalogSup"))
-
-  val input = scala.io.StdIn
-  var run = true
-
-  catalog ! "DUPA"
-
-  while (run) {
-    val str = input.readLine("Enter command : [quit]\n")
-    str match {
-      case "quit" =>
-        run = false
-        catalog ! PoisonPill
-
-      case _ =>
-        println("Invalid command")
-    }
-  }
-  system.terminate()
+  println(catalog.path)
+  Await.result(catalogSystem.whenTerminated, Duration.Inf)
 }

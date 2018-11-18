@@ -10,4 +10,6 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.0.5" % "test",
   "com.typesafe.akka" %% "akka-persistence" % "2.5.18",
   "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8",
-  "com.typesafe.akka" %% "akka-remote" % "2.5.18")
+  "com.typesafe.akka" %% "akka-remote" % "2.5.18",
+  "com.typesafe.akka" %% "akka-http" % "10.1.5",
+  "com.typesafe.akka" %% "akka-stream" % "2.5.18")
