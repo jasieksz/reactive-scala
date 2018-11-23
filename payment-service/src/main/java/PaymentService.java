@@ -50,8 +50,7 @@ class PaymentHandler implements Runnable {
     }
 
     private String handlePayment() {
-        if (ThreadLocalRandom.current().nextInt(0, 100) < 90)
-            return "OK";
-        return "ERR";
+        int result = ThreadLocalRandom.current().nextInt(0, 4);
+        return String.valueOf(result);
     }
 }

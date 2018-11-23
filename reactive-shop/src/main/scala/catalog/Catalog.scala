@@ -23,6 +23,7 @@ class Catalog() {
     val keys = keyWords.map(k => k.toLowerCase)
     itemsMap.keys.toList
       .map(item => (item, keys.count(item.name.toLowerCase.contains)))
+      .filter(_._2 > 0)
       .sortBy(-_._2)
       .take(10)
       .map(_._1)

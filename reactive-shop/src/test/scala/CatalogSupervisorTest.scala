@@ -1,39 +1,47 @@
-import akka.actor.{ActorSystem, Props}
-import akka.pattern.ask
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.TestProbe
 import akka.util.Timeout
+import catalog.CatalogSupervisor
 import catalog.CatalogSupervisor.{SearchItem, SearchResult}
-import catalog.{Catalog, SearchWorker}
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{AsyncFlatSpec, Matchers}
+import org.scalatest.{FlatSpec, Matchers}
 
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Success
 
 
-class CatalogSupervisorTest extends AsyncFlatSpec with Matchers {
+class CatalogSupervisorTest extends FlatSpec with Matchers {
 
-  implicit val timeout: Timeout = 3.second
+  implicit val timeout: Timeout = 10.second
 
   "A catalog supervisor" should
     "find items" in {
+
     val config = ConfigFactory.load()
 
     val catalogSystem = ActorSystem("Catalog", config.getConfig("catalog").withFallback(config))
-    catalogSystem.actorOf(Props(new SearchWorker(new Catalog())), "searchworker")
+    catalogSystem.actorOf(Props(new CatalogSupervisor()), "catalogsupervisor")
 
-    val actorSystem = ActorSystem("system")
-    val catalogSupervisor = actorSystem.actorSelection("akka.tcp://Catalog@127.0.0.1:2554/user/searchworker")
+    Thread.sleep(5000)
 
-    val probe = TestProbe()(actorSystem)
-    val query = SearchItem(List("Fanta"), probe.ref)
+    val shopSystem = ActorSystem("Shop", config.getConfig("shop").withFallback(config))
+    val testActor = TestProbe()(shopSystem)
+    val catalogSupervisor = shopSystem.actorSelection("akka.tcp://Catalog@127.0.0.1:2554/user/catalogsupervisor")
 
-    for {
-      productCatalogActorRef <- catalogSupervisor.resolveOne()
-      items <- (productCatalogActorRef ? query).mapTo[SearchResult]
-    } yield {
-      println(items)
-      assert(items.items.size == 10)
+    val query = SearchItem(List("Fanta Orange"), testActor.ref)
+
+    val catalogSupervisorRef: Future[ActorRef] = catalogSupervisor.resolveOne()
+
+    catalogSupervisorRef.onComplete {
+      case Success(ref) =>
+        ref ! query
+      case scala.util.Failure(exception) =>
+        exception.printStackTrace()
     }
 
+    val searchResult: SearchResult = testActor.receiveOne(10 seconds).asInstanceOf[SearchResult]
+    assert(searchResult.items.size == 7)
   }
 }

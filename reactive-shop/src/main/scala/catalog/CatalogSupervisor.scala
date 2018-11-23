@@ -20,7 +20,7 @@ class CatalogSupervisor extends Actor {
 
   override def receive: Receive =  LoggingReceive {
     case SearchItem(keyWords, replyTo) =>
-      router ! SearchItem(keyWords, replyTo)
+      router.forward(SearchItem(keyWords, replyTo))
   }
 
   override def supervisorStrategy: OneForOneStrategy = OneForOneStrategy(10, 1.minute) {
