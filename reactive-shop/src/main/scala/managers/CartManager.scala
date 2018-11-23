@@ -67,7 +67,6 @@ class CartManager(val persistence: String,
 
     case OrderManager.GetCart(replyTo) =>
       replyTo ! cart
-      println("CURRENT STATE : " + cart + "\n")
 
     case "snap" =>
       println("\nSAVING")
@@ -96,7 +95,6 @@ class CartManager(val persistence: String,
 
     case OrderManager.GetCart(replyTo) =>
       replyTo ! cart
-      println("CURRENT STATE : " + cart + "\n")
 
     case "snap" =>
       println("SAVING\n")

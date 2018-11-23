@@ -1,6 +1,10 @@
 package managers
 
-import akka.actor.{ActorRef, PoisonPill, Props, Timers}
+import java.net.HttpRetryException
+import java.nio.file.AccessDeniedException
+
+import akka.actor.SupervisorStrategy.{Escalate, Restart, Resume}
+import akka.actor.{ActorRef, OneForOneStrategy, PoisonPill, Props, SupervisorStrategy, Timers}
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
 import managers.CheckoutManager._
@@ -109,6 +113,16 @@ class CheckoutManager(val persistence: String,
 
     case PaymentManager.PaymentCancelled(checkoutRef) =>
       persist(PaymentManager.PaymentCancelled(checkoutRef))(event => updateState(event, checkout)(_ => sender() ! PoisonPill))
+  }
+
+  def cancelled(): Receive = LoggingReceive {
+    case _ => println()
+  }
+
+  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy(10, 1 minute) {
+    case _: AccessDeniedException => Resume
+    case _: HttpRetryException => Restart
+    case _: Exception => Escalate
   }
 }
 

@@ -7,7 +7,6 @@ import managers.CartManager._
 import managers.OrderManager.GetCart
 import model.{Cart, Item}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
 
@@ -18,15 +17,13 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
   with ScalaFutures
   with Matchers {
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig(timeout = Span(5000, Seconds))
-
   val apple: Item = Item(URI.create("apple"), "apple", 1)
   val orange: Item = Item(URI.create("orange"), "orange", 1)
 
-  "A cart" should {
+  "A cart manager" should {
     "add item" in {
       val probe = TestProbe()
-      val actorRef = system.actorOf(Props(new CartManager("id-2")))
+      val actorRef = system.actorOf(Props(new CartManager("id-42")))
       actorRef ! StartCart(actorRef)
 
       actorRef ! AddItem(apple, probe.ref)
@@ -35,7 +32,7 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
 
     "remove item" in {
       val probe = TestProbe()
-      val actorRef = system.actorOf(Props(new CartManager("id-3")))
+      val actorRef = system.actorOf(Props(new CartManager("id-43")))
 
       actorRef ! StartCart(actorRef)
       actorRef ! AddItem(apple, actorRef)
@@ -48,7 +45,7 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
 
     "start checkout" in {
       val probe = TestProbe()
-      val actorRef = system.actorOf(Props(new CartManager("id-4")))
+      val actorRef = system.actorOf(Props(new CartManager("id-44")))
       actorRef ! StartCart(actorRef)
       actorRef ! AddItem(apple, actorRef)
 
@@ -58,7 +55,7 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
 
     "persist" in {
       val managerRef = TestProbe()
-      val cart = system.actorOf(Props(new CartManager("id-6")))
+      val cart = system.actorOf(Props(new CartManager("id-45")))
       var cartData = Cart.empty
 
       cart ! StartCart(managerRef.ref)
@@ -82,12 +79,11 @@ class CartManagerTest extends TestKit(ActorSystem("CartManagerTest"))
       managerRef.expectMsg(cartData)
 
       cart ! "snap"
-
-      Thread.sleep(3000)
-
+      Thread.sleep(2000)
       cart ! PoisonPill
+      Thread.sleep(2000)
 
-      val restoredCart = system.actorOf(Props(new CartManager("id-6")))
+      val restoredCart = system.actorOf(Props(new CartManager("id-45")))
 
       restoredCart ! GetCart(managerRef.ref)
       managerRef.expectMsg(cartData)

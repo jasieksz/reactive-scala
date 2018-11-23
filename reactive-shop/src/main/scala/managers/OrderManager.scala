@@ -5,11 +5,18 @@ import akka.event.LoggingReceive
 import akka.util.Timeout
 import managers.OrderManager._
 import model.Item
+import akka.pattern.ask
+import catalog.CatalogSupervisor
+import catalog.CatalogSupervisor.SearchResult
 
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+
 
 class OrderManager extends Timers {
   implicit val timeout: Timeout = Timeout(1 seconds)
+
+  val productCatalog = context.actorSelection("akka.tcp://catalog@127.0.0.1:2554/catalog/user/catalogsupervisor")
 
   self ! Initialize
 
@@ -39,6 +46,16 @@ class OrderManager extends Timers {
 
     case CartManager.CheckoutStarted(checkout) =>
       context.become(withCheckout(cart, checkout))
+
+    case SearchItem(keyWords) =>
+      println(productCatalog.anchorPath)
+      productCatalog ! CatalogSupervisor.SearchItem(keyWords, self)
+      for {
+        productCatalogActorRef <- productCatalog.resolveOne()
+        items <- (productCatalogActorRef ? CatalogSupervisor.SearchItem(keyWords, self)).mapTo[SearchResult]
+      } yield {
+        println(items)
+      }
   }
 
   def withCheckout(cart: ActorRef, checkout: ActorRef): Receive = LoggingReceive {
@@ -104,7 +121,10 @@ object OrderManager {
 
   case class GetCart(replyTo: ActorRef) extends OrderManagerCommand
 
+  case class SearchItem(keyWords: List[String]) extends OrderManagerCommand
+
   sealed trait OrderManagerEvent extends Event
 
   case object Done extends OrderManagerEvent
+
 }

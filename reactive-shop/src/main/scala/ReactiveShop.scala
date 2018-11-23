@@ -1,38 +1,33 @@
-import java.net.URI
-
 import akka.actor.{ActorSystem, Props}
-import managers.OrderManager
-import model.Item
+import com.typesafe.config.ConfigFactory
+import managers.{OrderManager, PaymentManager}
+import managers.PaymentManager.Pay
+
 
 object ReactiveShop extends App {
-  val system = ActorSystem("system")
 
-  val manager = system.actorOf(Props(new OrderManager()))
 
-  val apple: Item = Item(URI.create("apple"), "apple", 1)
-  val orange: Item = Item(URI.create("orange"), "orange", 1)
+  val config = ConfigFactory.load()
+  val shopSystem = ActorSystem("shop", config.getConfig("shop").withFallback(config))
 
-  Thread.sleep(1000)
+  val manager = shopSystem.actorOf(Props(new OrderManager()), "ordermanager")
 
-  manager ! OrderManager.AddItem(apple)
-  manager ! OrderManager.AddItem(orange)
+  val paymentManager = shopSystem.actorOf(Props(new PaymentManager(manager)), "paymentmanager")
 
-  manager ! OrderManager.StartCheckout
+  Thread.sleep(5000)
+  paymentManager ! Pay(manager)
 
-  Thread.sleep(1000)
+  Thread.sleep(500)
+  paymentManager ! Pay(manager)
 
-  manager ! OrderManager.SelectDeliveryMethod("poczta")
-  manager ! OrderManager.SelectPaymentMethod("visa")
+  Thread.sleep(500)
+  paymentManager ! Pay(manager)
 
-  Thread.sleep(1000)
+  Thread.sleep(500)
+  paymentManager ! Pay(manager)
 
-  manager ! OrderManager.Buy
+  Thread.sleep(500)
+  shopSystem.terminate()
 
-  Thread.sleep(1000)
-
-  manager ! OrderManager.Pay
-
-  Thread.sleep(3000)
-
-  system.terminate()
 }
+
