@@ -1,8 +1,10 @@
 package managers
 
+import java.net.{HttpRetryException, SocketTimeoutException}
+import java.nio.file.AccessDeniedException
 import java.util.UUID
 
-import akka.actor.{ActorRef, ActorSystem, PoisonPill, Timers}
+import akka.actor.{ActorRef, ActorSystem, Timers}
 import akka.event.LoggingReceive
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
@@ -19,7 +21,9 @@ class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration =
   implicit val system: ActorSystem = context.system
   final implicit val materializer: ActorMaterializer = ActorMaterializer(ActorMaterializerSettings(context.system))
 
-  val paymentServicePath = "http://localhost:1234/payment"
+  var paymentServicePath = "http://localhost:1234/payment"
+
+
 
   override def receive: Receive = unnamed()
 
@@ -30,18 +34,7 @@ class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration =
         response <- Http().singleRequest(HttpRequest(uri = paymentServicePath))
         result <- response.entity.dataBytes.runFold(ByteString(""))(_ ++ _).map(body => body.utf8String)
       } yield {
-        result match {
-          case "OK" =>
-            println("OKI")
-            val id = UUID.randomUUID()
-            replyTo ! PaymentConfirmed(id)
-            checkout ! PaymentReceived(id)
-
-          case "ERR" =>
-            println("BOOOM")
-            throw new NullPointerException("boom!")
-            // TODO : SupervisorStrategy in parent
-        }
+        handleResponse(result, replyTo)
       }
 
     case Cancel(replyTo) =>
@@ -55,7 +48,30 @@ class PaymentManager(checkout: ActorRef, paymentExpirationTime: FiniteDuration =
   }
 
   def cancelled(): Receive = LoggingReceive {
-    case _ => self ! PoisonPill
+    case _ => println()
+  }
+
+  private def handleResponse(result: String, replyTo: ActorRef): Unit = {
+    result match {
+      case "1" =>
+        val id = UUID.randomUUID()
+        replyTo ! PaymentConfirmed(id)
+        checkout ! PaymentReceived(id)
+
+      case "2" =>
+        println("BOOM")
+        throw new AccessDeniedException("Invalid key")
+
+      case "3" =>
+        println("BOOOM")
+        throw new SocketTimeoutException("Server not responding")
+
+    }
+
+  }
+
+  override def postRestart(reason: Throwable): Unit = {
+    paymentServicePath = "http://localhost:1234/alternative"
   }
 }
 

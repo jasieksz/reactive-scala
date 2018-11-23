@@ -26,17 +26,8 @@ object ReactiveShop extends App {
   Thread.sleep(500)
   paymentManager ! Pay(manager)
 
-  Thread.sleep(5000)
-  paymentManager ! Pay(manager)
-
   Thread.sleep(500)
-  paymentManager ! Pay(manager)
-
-  Thread.sleep(500)
-  paymentManager ! Pay(manager)
-
-  Thread.sleep(500)
-  paymentManager ! Pay(manager)
+  shopSystem.terminate()
 
 }
 
