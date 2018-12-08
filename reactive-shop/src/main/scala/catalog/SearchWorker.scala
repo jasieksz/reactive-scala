@@ -7,9 +7,9 @@ import catalog.CatalogSupervisor.{SearchItem, SearchResult}
 class SearchWorker(catalog: Catalog) extends Actor {
 
   override def receive: Receive = LoggingReceive {
-    case SearchItem(keyWords, replyTo) =>
+    case SearchItem(keyWords) =>
       val response = catalog.search(keyWords)
-      replyTo ! SearchResult(response)
+      sender() ! SearchResult(response)
   }
 }
 
